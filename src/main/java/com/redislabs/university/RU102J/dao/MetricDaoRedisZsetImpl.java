@@ -5,13 +5,15 @@ import com.redislabs.university.RU102J.api.MeterReading;
 import com.redislabs.university.RU102J.api.MetricUnit;
 import redis.clients.jedis.Jedis;
 import redis.clients.jedis.JedisPool;
-import redis.clients.jedis.Pipeline;
 import redis.clients.jedis.Tuple;
 
 import java.text.DecimalFormat;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Retain metrics using Redis sorted sets.
@@ -22,10 +24,10 @@ import java.util.*;
  *
  */
 public class MetricDaoRedisZsetImpl implements MetricDao {
-    static private final Integer MAX_METRIC_RETENTION_DAYS = 30;
-    static private final Integer MAX_DAYS_TO_RETURN = 7;
-    static private final Integer METRICS_PER_DAY = 60 * 24;
-    static private final Integer METRIC_EXPIRATION_SECONDS =
+    static final Integer MAX_METRIC_RETENTION_DAYS = 30;
+    static final Integer MAX_DAYS_TO_RETURN = 7;
+    static final Integer METRICS_PER_DAY = 60 * 24;
+    static final Integer METRIC_EXPIRATION_SECONDS =
             60 * 60 * 24 * MAX_METRIC_RETENTION_DAYS + 1;
     private final JedisPool jedisPool;
 
@@ -51,6 +53,9 @@ public class MetricDaoRedisZsetImpl implements MetricDao {
         // START Challenge #2
         String metricKey = RedisSchema.getDayMetricKey(siteId, unit, dateTime);
         Integer minuteOfDay = getMinuteOfDay(dateTime);
+
+        jedis.zadd(metricKey, minuteOfDay, value+":"+minuteOfDay);
+
         // END Challenge #2
     }
 
@@ -70,8 +75,8 @@ public class MetricDaoRedisZsetImpl implements MetricDao {
 
         List<Measurement> measurements = new ArrayList<>();
         ZonedDateTime currentDate = time;
-        Integer count = limit;
-        Integer iterations = 0;
+        int count = limit;
+        int iterations = 0;
 
         // This loop extracts the elements of successive
         // sorted sets until it reaches the requested limit.
@@ -106,7 +111,7 @@ public class MetricDaoRedisZsetImpl implements MetricDao {
 
             // Return a reverse range so that we're always consuming from the end
             // of the sorted set.
-            Set<Tuple> metrics = jedis.zrevrangeWithScores(metricKey, 0, count - 1);
+            Set<Tuple> metrics = jedis.zrevrangeWithScores(metricKey, 0, count - 1L);
             for (Tuple minuteValue : metrics) {
                 // Elements of the set are of the form [measurement]:[minute]
                 // The MeasurementMinute class abstracts this for us.
@@ -185,7 +190,7 @@ public class MetricDaoRedisZsetImpl implements MetricDao {
 
         public String toString() {
             return decimalFormat.format(measurement) + ':' +
-                    String.valueOf(minuteOfDay);
+                    minuteOfDay;
         }
     }
 }
